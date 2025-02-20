@@ -1,0 +1,42 @@
+.relatedproducts {
+    width: 100%;
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 20px;
+    text-align: center;
+}
+
+.relatedproducts h1 {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.relatedproducts hr {
+    width: 50px;
+    height: 3px;
+    background-color: #ff6600;
+    border: none;
+    margin: 10px auto 20px auto;
+}
+
+.relatedproducts-item {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+
+.relatedproducts-item .item {
+    width: 220px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease-in-out;
+}
+
+.relatedproducts-item .item:hover {
+    transform: scale(1.05);
+}

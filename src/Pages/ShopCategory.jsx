@@ -1,37 +1,46 @@
-import React, { useContext, useEffect } from "react";
-import './css/ShopCategory.css';
+import React, { useContext } from "react";
+import { useParams } from "react-router-dom";
+import './CSS/ShopCategory.css';
 import dropdown_icon from '../components/Assets/dropdown_icon.png';
 import { ShopContext } from '../Context/ShopContext';
 import Item from '../components/Item/Item';
 
 const ShopCategory = (props) => {
-    const { all_product } = useContext(ShopContext);
+    const { category } = useParams(); 
+    const { all_products } = useContext(ShopContext);
 
-    useEffect(() => {
-        console.log("All Products:", all_product);
-        console.log("Current Category:", props.category);
-    }, [all_product, props.category]);
+    
+    const selectedCategory = props.category || category;
+
+
+    const filteredProducts = all_products.filter(item => item.category === selectedCategory);
 
     return (
       <div className='shop-category'>
         <img className='shopcategory-banner' src={props.banner} alt=""/>
         <div className="shopcategory-indexSort">
           <p>
-            <span>Showing 1-12</span> out of 36 products
+            <span>Showing {filteredProducts.length}</span> products
           </p>
           <div className="shopcategory-sort">
-            sort by <img src={dropdown_icon} alt=""/>
+            Sort by <img src={dropdown_icon} alt="Sort dropdown"/>
           </div>
         </div>
         <div className="shopcategory-products">
-          {all_product && all_product.map((item, i) => {
-            console.log(`Checking item: ${item.name}, Category: ${item.category}`);
-            if (props.category.trim().toLowerCase() === item.category.trim().toLowerCase()) {
-              return <Item key={i} id={item.id} name={item.name} image={item.image} new_price={item.new_price} old_price={item.old_price} />;
-            } else {
-              return null;
-            }
-          })}
+          {filteredProducts.map((item) => (
+            <Item 
+              key={item.id} 
+              id={item.id} 
+              name={item.name} 
+              image={item.image} 
+              new_price={item.new_price} 
+              old_price={item.old_price} 
+            />
+          ))}
+        </div>
+        {filteredProducts.length === 0 && <p className="no-products">No products found in this category.</p>}
+        <div className="shopcategory-loadmore">
+          Explore more
         </div>
       </div>
     );
