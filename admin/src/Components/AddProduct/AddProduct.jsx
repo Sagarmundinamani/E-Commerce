@@ -34,12 +34,23 @@ const AddProduct = () => {
       },
       body: formData,
     })
-    .then((resp) => resp.json())
-    .then((data) => { responseData = data });
+    .then((resp) => resp.json()).then((data) => { responseData = data });
 
-    if (responseData.success) {
+    if (responseData.success)
+       {
       product.image = responseData.image_url;
       console.log(product);
+      await fetch('http://localhost:4000/addproduct',{
+        method:'POST',
+        headers:{
+          Accept:'application/json',
+          'contenet-type':'application/json',
+
+        },
+        body:JSON.stringify(product),
+      }).then((resp)=>resp.json()).then((data)=>{
+        data.success?alert("product Added"):alert("failed")
+      })
     }
   };
 
