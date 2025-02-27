@@ -1,19 +1,39 @@
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
 const fs = require("fs");
+const bcrypt = require("bcryptjs");
+
 require("dotenv").config();
 
-const port = process.env.PORT || 4000; // ✅ Define port properly
+const app = express();
+const port = process.env.PORT || 4000;
+const saltRounds = 10;
 
 app.use(express.json());
-app.use(cors());
 
-// ✅ Check if .env file is loaded correctly
+// ✅ Proper CORS Configuration
+const allowedOrigins = ["http://localhost:5173"];
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  allowedHeaders: "Content-Type,Authorization"
+}));
+
+// ✅ Handle Preflight Requests
+app.options("*", cors());
+
+// ✅ Check if MONGO_URI is defined
 if (!process.env.MONGO_URI) {
   console.error("❌ MONGO_URI is missing. Please check your .env file.");
   process.exit(1);
@@ -21,8 +41,8 @@ if (!process.env.MONGO_URI) {
 
 const uri = process.env.MONGO_URI;
 
-// ✅ Database connection
-mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
+// ✅ Database Connection with Error Handling
+mongoose.connect(uri)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((error) => {
     console.error("❌ MongoDB connection error:", error);
@@ -35,7 +55,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ✅ Image Storage Engine
+// ✅ Multer Storage Configuration
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -43,23 +63,22 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
+app.use('/uploads/images', express.static(uploadDir));
 
-app.use('/images', express.static(uploadDir));
-
-// ✅ API creation
+// ✅ API to check if server is running
 app.get("/", (req, res) => {
-  res.send("Express App is Running");
+  res.send("🚀 Express App is Running");
 });
 
-// ✅ File Upload API (Fixing "Unexpected field" issue)
-app.post("/upload", upload.single('product'), (req, res) => {
+// ✅ File Upload API
+app.post("/upload", upload.single('image'), (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ success: 0, message: "No file uploaded" });
+    return res.status(400).json({ success: false, message: "No file uploaded" });
   }
   res.json({
-    success: 1,
-    image_url: `http://localhost:${port}/images/${req.file.filename}`
+    success: true,
+    image_url: `http://localhost:${port}/uploads/images/${req.file.filename}`
   });
 });
 
@@ -77,114 +96,115 @@ const Product = mongoose.model("Product", {
 
 // ✅ Add Product API
 app.post('/addproduct', async (req, res) => {
-  let products = await Product.find({});
-  let id = (products.length > 0) ? products[products.length - 1].id + 1 : 1;
+  try {
+    let lastProduct = await Product.findOne().sort({ id: -1 });
+    let id = lastProduct ? lastProduct.id + 1 : 1;
 
-  const product = new Product({
-    id: id,
-    name: req.body.name,
-    category: req.body.category,
-    new_price: req.body.new_price,
-    old_price: req.body.old_price,
-    image: req.body.image,
-  });
+    const product = new Product({
+      id: id,
+      name: req.body.name,
+      category: req.body.category,
+      new_price: req.body.new_price,
+      old_price: req.body.old_price,
+      image: req.body.image,
+    });
 
-  await product.save();
-  res.json({ success: true, name: req.body.name });
+    await product.save();
+    res.json({ success: true, name: req.body.name });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
 });
 
 // ✅ Remove Product API
 app.post('/removeproduct', async (req, res) => {
-  await Product.findOneAndDelete({ id: req.body.id });
-  res.json({ success: true, name: req.body.name });
+  try {
+    let deletedProduct = await Product.findByIdAndDelete(req.body._id);
+    if (deletedProduct) {
+      res.json({ success: true, message: "Product removed successfully" });
+    } else {
+      res.status(404).json({ success: false, message: "Product not found" });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
 });
 
 // ✅ Get All Products API
 app.get('/allproducts', async (req, res) => {
-  let products = await Product.find({});
-  res.send(products);
+  try {
+    let products = await Product.find({});
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
 });
-const users = mongoose.model('users',{
-  name:{
-    type:String,
 
-  },
-  email:{
-    type:String,
-    unique:true,
-  },
-  passwords:{
-    type:String,
+// ✅ User Schema
+const User = mongoose.model("User", {
+  name: { type: String, required: true },
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+  cartData: { type: Object, default: {} },
+  date: { type: Date, default: Date.now }
+});
 
-  },
-  cartData:{
-    type:Object,
-
-  },
-  date:{
-    type:Date,
-    default:Date.now,
-  }
-})
-app.post('/signup',async (req, res) => {
-  let check = awaitUser.findOne({email:req.body.email});
-  if(check){
-    return res.status(400).json({success:false,errors:"exsting user found with same email"})
-  }
-  let cart={};
-  for (let i=0; i<300; i++){
-    cart[i]=0;
-  }
-  const user =new Users({
-    name:req.body.username,
-    email:req.body.email,
-    password:req.body.password,
-    cartData:cart,
-  })
-
-  await user.save();
-  const data ={
-    user:{
-      id:user.id
+// ✅ Signup API
+app.post('/signup', async (req, res) => {
+  try {
+    let existingUser = await User.findOne({ email: req.body.email });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: "User already exists with this email" });
     }
-  }
 
-  const token =jwt.sign(data,'secret_ecom');
-  res.json({success:true, token})
-})
+    let hashedPassword = await bcrypt.hash(req.body.password, saltRounds);
+    let cart = {};
+    for (let i = 0; i < 300; i++) {
+      cart[i] = 0;
+    }
+
+    const user = new User({
+      name: req.body.username,
+      email: req.body.email,
+      password: hashedPassword,
+      cartData: cart,
+    });
+
+    await user.save();
+    const token = jwt.sign({ user: { id: user.id } }, 'secret_ecom');
+    res.json({ success: true, token });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+// ✅ Login API
+app.post('/login', async (req, res) => {
+  try {
+    let user = await User.findOne({ email: req.body.email });
+    if (!user) {
+      return res.status(400).json({ success: false, error: "Invalid email or password" });
+    }
+
+    let isMatch = await bcrypt.compare(req.body.password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, error: "Invalid email or password" });
+    }
+
+    const token = jwt.sign({ user: { id: user.id } }, 'secret_ecom');
+    res.json({ success: true, token });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
 // ✅ Global Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error("❌ Server Error:", err.stack);
-  res.status(500).json({ success: 0, error: "Internal Server Error", details: err.message });
+  res.status(500).json({ success: false, error: "Internal Server Error" });
 });
 
-app.post('/login',async(req, res) => {
-  let user= await Users.findOne({ email: req.body.email});
-  if (user){
-    const passCompare =req.body.password ===user.password;
-    if(passCompare){
-      const data={
-        user:{
-          id:user.id
-        }
-      }
-      const token =jwt.sign(data,'secret_ecom');
-      res.json({success:true, token});
-    }
-    else{
-      res.json({success:false, errors:"Wrong Password"});
-    }
-  }
-  else{
-    res.json({success:false, errors:"Wrong email Id"})
-  }
-})
-
 // ✅ Start Server
-app.listen(port, (error) => {
-  if (!error) {
-    console.log(`🚀 Server Running on Port: ${port}`);
-  } else {
-    console.error("❌ Error:", error);
-  }
+app.listen(port, () => {
+  console.log(`🚀 Server Running on Port: ${port}`);
 });
